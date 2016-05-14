@@ -4,99 +4,99 @@
 #include <RTClib.h>
 #include <Ultrasonic.h>
 #include <DHT.h>
-#include <LinkedList.h>
+//#include <LinkedList.h>
 //*********************************************************************
 // Class Job and (Schedule)
 //*********************************************************************
 
-class Job{
-public:
-  uint16_t id;
-  String startTime, endTime, detail;
-  bool sun, mon, tue, wen, thu, fri, sat, active;
-
-  Job(uint16_t newId, String detail) : id(newId), detail(detail){
-    int i =0;
-    String wordCheck[15];
-    wordCheck[i] = getValue(detail, ' ', i);
-
-    while(wordCheck[i] != ""){
-      i++;
-      wordCheck[i] = getValue(detail, ' ', i);
-    }
-
-    startTime = wordCheck[2];
-    endTime   = wordCheck[3];
-    sun       = wordCheck[4];
-    mon       = wordCheck[5];
-    tue       = wordCheck[6];
-    wen       = wordCheck[7];
-    thu       = wordCheck[8];
-    fri       = wordCheck[9];
-    sat       = wordCheck[10];
-    active    = wordCheck[11];
-  }
-
-  String getValue(String data, char separator, int index)
-  {
-    int found = 0;
-    int strIndex[] = {0, -1};
-    int maxIndex = data.length()-1;
-
-    for(int i=0; i<=maxIndex && found<=index; i++){
-      if(data.charAt(i)==separator || i==maxIndex){
-          found++;
-          strIndex[0] = strIndex[1]+1;
-          strIndex[1] = (i == maxIndex) ? i+1 : i;
-      }
-    }
-
-    return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
-  }
-
-};
-
-// dictionary
-LinkedList<Job*> _listJobs = LinkedList<Job*>();
-int jobUniqueId = 0;
+//class Job{
+//public:
+//  uint16_t id;
+//  String startTime, endTime, detail;
+//  bool sun, mon, tue, wen, thu, fri, sat, active;
+//
+//  Job(uint16_t newId, String detail) : id(newId), detail(detail){
+//    int i =0;
+//    String wordCheck[15];
+//    wordCheck[i] = getValue(detail, ' ', i);
+//
+//    while(wordCheck[i] != ""){
+//      i++;
+//      wordCheck[i] = getValue(detail, ' ', i);
+//    }
+//
+//    startTime = wordCheck[2];
+//    endTime   = wordCheck[3];
+//    sun       = wordCheck[4];
+//    mon       = wordCheck[5];
+//    tue       = wordCheck[6];
+//    wen       = wordCheck[7];
+//    thu       = wordCheck[8];
+//    fri       = wordCheck[9];
+//    sat       = wordCheck[10];
+//    active    = wordCheck[11];
+//  }
+//
+//  String getValue(String data, char separator, int index)
+//  {
+//    int found = 0;
+//    int strIndex[] = {0, -1};
+//    int maxIndex = data.length()-1;
+//
+//    for(int i=0; i<=maxIndex && found<=index; i++){
+//      if(data.charAt(i)==separator || i==maxIndex){
+//          found++;
+//          strIndex[0] = strIndex[1]+1;
+//          strIndex[1] = (i == maxIndex) ? i+1 : i;
+//      }
+//    }
+//
+//    return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
+//  }
+//
+//};
+//
+//// dictionary
+//LinkedList<Job*> _listJobs = LinkedList<Job*>();
+//int jobUniqueId = 0;
 //***************************End Class Job***********************************
 
 //*********************************************************************
 // Function for Scheduler
 //*********************************************************************
-void addJob(String allDetail){
-    Job *ajob = new Job(jobUniqueId, allDetail);
-    _listJobs.add(ajob);
-    jobUniqueId++;
-}
-
-int removeJob(int aId){
-    bool found = false;
-    Job *aJob;
-    for(int i=0; i < _listJobs.size() ; i++){
-      aJob = _listJobs.get(i);
-      if(aJob->id == aId){
-        _listJobs.remove(i);
-        found = true;
-        break;
-      }
-    }
-    if(found){return aId;}
-    else{return -1;}
-}
+//void addJob(String allDetail){
+//    Job *ajob = new Job(jobUniqueId, allDetail);
+//    _listJobs.add(ajob);
+//    jobUniqueId++;
+//}
+//
+//int removeJob(int aId){
+//    bool found = false;
+//    Job *aJob;
+//    for(int i=0; i < _listJobs.size() ; i++){
+//      aJob = _listJobs.get(i);
+//      if(aJob->id == aId){
+//        _listJobs.remove(i);
+//        found = true;
+//        break;
+//      }
+//    }
+//    if(found){return aId;}
+//    else{return -1;}
+//}
 
 RTC_DS1307 rtc;
 // valve
-#define valve 6
+#define valve 7
 
 // data transfer rate
-int transferRate = 290;
+int transferRate = 5;
  
 // sensor
-#define light 3
-#define temp 1
-#define air 2
-#define soil 4
+#define light 1 //analog
+#define temp 3
+#define air 4
+#define soil 0 // analog
 #define water 5
 #define cs_pin 10
 #define DHTTYPE DHT22
@@ -106,10 +106,10 @@ DHT dht(temp, DHTTYPE);
 Ultrasonic ultrasonic(water);
 
 // option for watering depend on which sensor
-int optionScheHum = 0;
+int optionScheHum = 1;
 // variable to control the system
-int airLow = 0;
-int airHigh = 0;
+int soilLow = 0;//970 for test
+int soilHigh = 0;//1000 for test
 int waterLow = 0;
 int waterHigh = 0;
 
@@ -129,7 +129,11 @@ unsigned long timePrev;
 
 // SDCard
 bool error = false;
+bool error2 = false;
 File logFile;
+File logFile2;
+int countOpen = 0;
+int countClose = 0;
 
 //Serial input
 char inChar;
@@ -142,15 +146,15 @@ String wordCheck;
 // *************** Function *************************
 // print Date & Time
 void display(int dd, int mm, int yy, int hh, int mi) {
-  Serial.print(dd);
-  Serial.print("/");
-  Serial.print(mm);
-  Serial.print("/");
-  Serial.print(yy);
-  Serial.print(" ");
-  Serial.print(hh);
-  Serial.print(":");  
-  Serial.println(mi);
+  //Serial.print(dd);
+  //Serial.print("/");
+  //Serial.print(mm);
+  //Serial.print("/");
+  //Serial.print(yy);
+  //Serial.print(" ");
+  //Serial.print(hh);
+  //Serial.print(":");  
+  //Serial.println(mi);
 }
 
 // append timeStamp in File
@@ -171,17 +175,26 @@ String timeStamp(int dd, int mm, int yy, int hh, int mi) {
 // get Data from Sensor
 int getData(int i){
   switch(i){
-    // (1,2,3,4,5) accordingly
     case temp:
+      //Serial.print("Temp: ");
+      //Serial.println(dht.readTemperature());
       return dht.readTemperature();
     case air:
+      //Serial.print("Humidity: ");
+      //Serial.println(dht.readHumidity());
       return dht.readHumidity();
     case light:
+      //Serial.print("Light: ");
+      //Serial.println(analogRead(light));
       return analogRead(light);
     case soil:
+      //Serial.print("Soil Moisture: ");
+      //Serial.println(analogRead(soil));
       return analogRead(soil);
     case water:
       ultrasonic.MeasureInCentimeters();
+      //Serial.print("Water Level: ");
+      //Serial.println(ultrasonic.RangeInCentimeters);
       return ultrasonic.RangeInCentimeters;
     default:
       break;
@@ -215,8 +228,12 @@ void setOption(int scheduleHum){
 }
 // method to set how low humidity should be to open valve and how high to close valve
 void setHumidity(int l, int h){
-  airLow = l;
-  airHigh = h;
+  soilLow = l;
+  soilHigh = h;
+  //Serial.println("===== Set Value to ======");
+  //Serial.print(soilLow);
+  //Serial.print(" ");
+  //Serial.println(soilHigh);
 }
 
 // method to set Schedule(timeStart, timeStop, Day0-6, active)
@@ -236,10 +253,41 @@ void setHumidity(int l, int h){
 
 void openValve( ){// may add int valveID
   digitalWrite(valve, HIGH);
+  //Serial.println(F("======= Open Valve ========"));
+  //Serial.println(F("======= Write Data (Water) ========"));
+  //Serial.print("Soil Moisture: ");
+  //Serial.println(getData(soil));
+  countClose = 0;
+  if (countOpen == 0){
+    countOpen =1;
+    logFile2.print(timeStamp(dd,mm,yy,hh,mi));
+    logFile2.print(",");
+    logFile2.print(getData(soil));
+    logFile2.print(",");
+    logFile2.print("open");
+    logFile2.println();
+    logFile2.flush(); 
+    }
   }
 
 void closeValve( ){// may add int valveID
-  digitalWrite(valve, LOW);}
+  digitalWrite(valve, LOW);
+  countOpen = 0;
+  //Serial.println(F("======= Close Valve ========"));
+  //Serial.println(F("======= Write Data (Water) ========"));
+  //Serial.print("Soil Moisture: ");
+  //Serial.println(getData(soil));
+  if (countClose = 0){
+    countClose = 1;
+    logFile2.print(timeStamp(dd,mm,yy,hh,mi));
+    logFile2.print(",");
+    logFile2.print(getData(soil));
+    logFile2.print(",");
+    logFile2.print("close");
+    logFile2.println();
+    logFile2.flush(); 
+    }
+  }
 
 void deleteSchedule(int scheduleID){
   //doSomething
@@ -258,6 +306,7 @@ void setup() {
   rtc.begin();
   dht.begin();
   Serial.begin(9600);
+  pinMode(valve, OUTPUT);
   if (!rtc.isrunning()){
     DateTime compileTime = DateTime(__DATE__,__TIME__);
     rtc.adjust(compileTime);
@@ -272,12 +321,30 @@ void setup() {
     logFile = SD.open("log.csv", FILE_WRITE);
     if (logFile == NULL){
       error =true;
-      Serial.println("Can't Open");}
-    else{ Serial.println("Open file for writing.");
+      //Serial.println("Can't Open");
+      }
+    else{ //Serial.println("Open file1 for writing.");
+//       logFile.print("Timestamp,Temperature,Light,Air Humidity,Soil Moisture,Water Level");
+//       logFile.println();
+//       logFile.flush();
+      }
+    logFile2 = SD.open("logWater.csv", FILE_WRITE);
+    if (logFile2 == NULL){
+      error2 = true;
+      //Serial.println("Can't Open");
+      }
+    else{ 
+      //Serial.println("Open file2 for writing.");
+//       logFile2.print("Timestamp,Soil Moisture, State");
+//       logFile2.println();
+//       logFile2.flush();
       }
     }
+    
    else {error = true;
-   Serial.println("Can't Open");}
+   error2 = true;
+   //Serial.println("Can't Open");
+   }
 }
 
 void loop() {
@@ -295,9 +362,11 @@ void loop() {
   timeNow = rtc.now().unixtime();
   timeElapsed = timeNow - timePrev;
   if (timeElapsed > transferRate) {
-    Serial.println("Write Data");
+    //Serial.println("======= Write Data ========");
     logFile.print(timeStamp(dd,mm,yy,hh,mi));
-    for (int i=0; i < sizeof(array); i++){
+    for (int i=0; i < 5; i++){
+      //Serial.print("Round:");
+      //Serial.println(i);
       logFile.print(",");
       logFile.print(getData(array[i]));
       }
@@ -308,8 +377,9 @@ void loop() {
 //      digitalWrite(D13, ledState); //turn LED on after 1 sec
   }
 
-// read From Serial
-  if (Serial.available() > 0){
+// read From //Serial
+  if (Serial.available() > 0)
+    {
     inChar = Serial.read();
     if (inChar == '\n' ){
       endFlag = true;
@@ -319,20 +389,30 @@ void loop() {
       }
     }
   if (endFlag == true){
-    Serial.print("end");
-    int i =0;
+    str.toLowerCase();
+    //Serial.print("end");
+    int i = 0;
+    //Serial.println("//////////////////////////////////////////////");
+    //Serial.println(str);
     String wordCheck[15];
     wordCheck[i] = getValue(str, ' ', i);
     
     while(wordCheck[i] != ""){
     //  wordCheck[i] = getValue(split, ' ', i);
-      Serial.println(wordCheck[i]);
+      //Serial.println(wordCheck[i]);
       i++;
       wordCheck[i] = getValue(str, ' ', i);
+      
     }
     
+    Serial.println((String)wordCheck[1]);
     if (wordCheck[1] == (String)"sethumidity"){
-      // set Humidity (Low, High) | Low: open valve | High: stop valve
+       //setHumidity (Low, High); // Low: open valve | High: stop valve
+      Serial.println("************************************************");
+      Serial.println("==== Setting Humidity ====");
+      Serial.print(wordCheck[2]);
+      Serial.print(" ");
+      Serial.println(wordCheck[3]);
       setHumidity(wordCheck[2].toInt(), wordCheck[3].toInt());
       }
     else if (wordCheck[1] == (String)"option"){
@@ -362,14 +442,22 @@ void loop() {
 //      // call Function
 //      }
       else {
-        Serial.println(F("Command not Found"));
+        //Serial.println(F("Command not Found"));
       }
     endFlag = false;
+    i = 0;
+    str = "";
     }
 
 // use var: optionScheHum to change the system watering option between Humidity and Schedule
   if (optionScheHum == 1){
-    
+    if (getData(soil) < soilLow){
+      openValve();
+
+      }
+    else if (getData(soil) > soilHigh){
+      closeValve();
+      }
   }
 
     
