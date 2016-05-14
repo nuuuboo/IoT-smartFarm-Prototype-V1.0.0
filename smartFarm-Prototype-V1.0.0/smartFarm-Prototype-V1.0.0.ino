@@ -271,11 +271,13 @@ void setup() {
   if (SD.begin(cs_pin)){
     logFile = SD.open("log.csv", FILE_WRITE);
     if (logFile == NULL){
-      error =true;}
+      error =true;
+      Serial.println("Can't Open");}
     else{ Serial.println("Open file for writing.");
       }
     }
-   else {error = true;}
+   else {error = true;
+   Serial.println("Can't Open");}
 }
 
 void loop() {
