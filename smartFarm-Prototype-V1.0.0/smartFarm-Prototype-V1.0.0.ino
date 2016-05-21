@@ -1,14 +1,16 @@
+#include <EEPROM.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <SD.h>
 #include <RTClib.h>
 #include <Ultrasonic.h>
 #include <DHT.h>
-//#include <LinkedList.h>
-//*********************************************************************
-// Class Job and (Schedule)
-//*********************************************************************
 
+//#include <LinkedList.h>
+////*********************************************************************
+//// Class Job and (Schedule)
+////*********************************************************************
+//
 //class Job{
 //public:
 //  uint16_t id;
@@ -59,11 +61,11 @@
 //// dictionary
 //LinkedList<Job*> _listJobs = LinkedList<Job*>();
 //int jobUniqueId = 0;
-//***************************End Class Job***********************************
-
-//*********************************************************************
-// Function for Scheduler
-//*********************************************************************
+////***************************End Class Job***********************************
+//
+////*********************************************************************
+//// Function for Scheduler
+////*********************************************************************
 //void addJob(String allDetail){
 //    Job *ajob = new Job(jobUniqueId, allDetail);
 //    _listJobs.add(ajob);
@@ -84,6 +86,7 @@
 //    if(found){return aId;}
 //    else{return -1;}
 //}
+// *********************************************************************
 
 RTC_DS1307 rtc;
 // valve
@@ -100,18 +103,20 @@ int transferRate = 5;
 #define water 5
 #define cs_pin 10
 #define DHTTYPE DHT22
+#define led 6
 
-int array[5] = {temp,light,air,soil,water};
+byte array[5] = {temp,light,air,soil,water};
 DHT dht(temp, DHTTYPE);
 Ultrasonic ultrasonic(water);
 
 // option for watering depend on which sensor
-int optionScheHum = 1;
+byte optionScheHum = 1;
 // variable to control the system
 int soilLow = 0;//970 for test
 int soilHigh = 0;//1000 for test
 int waterLow = 0;
 int waterHigh = 0;
+
 
 // dictionary
 //const byte HASH_SIZE = 5;
@@ -132,8 +137,8 @@ bool error = false;
 bool error2 = false;
 File logFile;
 File logFile2;
-int countOpen = 0;
-int countClose = 0;
+byte countOpen = 0;
+byte countClose = 0;
 
 //Serial input
 char inChar;
@@ -230,6 +235,8 @@ void setOption(int scheduleHum){
 void setHumidity(int l, int h){
   soilLow = l;
   soilHigh = h;
+  EEPROM.put(3,soilLow);
+  EEPROM.put(4,soilHigh);
   //Serial.println("===== Set Value to ======");
   //Serial.print(soilLow);
   //Serial.print(" ");
@@ -259,12 +266,12 @@ void openValve( ){// may add int valveID
   //Serial.println(getData(soil));
   countClose = 0;
   if (countOpen == 0){
-    countOpen =1;
+    countOpen = 1;
+    logFile2.print("open");
+    logFile2.print(",");
     logFile2.print(timeStamp(dd,mm,yy,hh,mi));
     logFile2.print(",");
     logFile2.print(getData(soil));
-    logFile2.print(",");
-    logFile2.print("open");
     logFile2.println();
     logFile2.flush(); 
     }
@@ -279,11 +286,11 @@ void closeValve( ){// may add int valveID
   //Serial.println(getData(soil));
   if (countClose = 0){
     countClose = 1;
+    logFile2.print("close");
+    logFile2.print(",");
     logFile2.print(timeStamp(dd,mm,yy,hh,mi));
     logFile2.print(",");
     logFile2.print(getData(soil));
-    logFile2.print(",");
-    logFile2.print("close");
     logFile2.println();
     logFile2.flush(); 
     }
@@ -298,6 +305,8 @@ void deleteSchedule(int scheduleID){
 void setWaterLevel(int low, int high){
   waterLow = low;
   waterHigh = high;
+  EEPROM.put(1,waterLow);
+  EEPROM.put(2,waterHigh);
 }
 // ********** End of Function *****************
 
@@ -307,16 +316,32 @@ void setup() {
   dht.begin();
   Serial.begin(9600);
   pinMode(valve, OUTPUT);
-  if (!rtc.isrunning()){
-    DateTime compileTime = DateTime(__DATE__,__TIME__);
-    rtc.adjust(compileTime);
-    dd = compileTime.day();
-    mm = compileTime.month();
-    yy = compileTime.year();
-    hh = compileTime.hour();
-    mi = compileTime.minute();
-    display(dd, mm, yy, hh, mi);
-   }
+  pinMode(led, OUTPUT);
+//  if (!rtc.isrunning()){
+//    DateTime compileTime = DateTime(__DATE__,__TIME__);
+//    rtc.adjust(compileTime);
+//    dd = compileTime.day();
+//    mm = compileTime.month();
+//    yy = compileTime.year();
+//    hh = compileTime.hour();
+//    mi = compileTime.minute();
+//    display(dd, mm, yy, hh, mi);
+//   }
+  // get Value from EEPROM for last value the system remembered
+  EEPROM.get(1,waterLow);
+  EEPROM.get(2,waterHigh);
+  EEPROM.get(3,soilLow);
+  EEPROM.get(4,soilHigh);
+  Serial.println("Value from EEPROM");
+  Serial.print(waterLow);
+  Serial.print(" ");
+  Serial.print(waterHigh);
+  Serial.print(" ");
+  Serial.print(soilLow);
+  Serial.print(" ");
+  Serial.print(soilHigh);
+  Serial.println(" ");
+  
   if (SD.begin(cs_pin)){
     logFile = SD.open("log.csv", FILE_WRITE);
     if (logFile == NULL){
@@ -450,17 +475,28 @@ void loop() {
     }
 
 // use var: optionScheHum to change the system watering option between Humidity and Schedule
+// Watering as Humidity Level
   if (optionScheHum == 1){
     if (getData(soil) < soilLow){
       openValve();
-
       }
     else if (getData(soil) > soilHigh){
       closeValve();
       }
   }
-
+// Watering as Schedule
+  else if (optionScheHum == 0){
     
+    }
+
+// check Water Level in Tank
+  if (getData(water) < waterLow){
+    // may be added a new value then open this valve
+    digitalWrite(led,HIGH);
+    }
+  else if (getData(water) > waterHigh){
+    digitalWrite(led,LOW);
+    }
 // end loop  
 }
 
